@@ -118,3 +118,10 @@ packaged/
 
 # generated zip
 packages/
+
+# E2E test downloads (browser fallback files captured during tests)
+tests/downloads/
+
+# Playwright output (JUnit XML, HTML report, traces)
+test-results/
+playwright-report/
