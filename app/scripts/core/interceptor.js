@@ -1,8 +1,9 @@
 import * as browser from 'webextension-polyfill';
 
 export function shouldIntercept(downloadItem, settings) {
-  // Don't re-intercept downloads this extension already initiated
-  if (downloadItem.byExtensionName === browser.i18n.getMessage('appName')) return false;
+  // Always intercept downloads explicitly triggered via the context menu ("Download with Motrix").
+  // These bypass size/blacklist checks — the user made a deliberate choice.
+  if (downloadItem.byExtensionName === browser.i18n.getMessage('appName')) return true;
   // Extension is disabled
   if (!settings.extensionStatus) return false;
   // File is smaller than the configured minimum (only when size is known)

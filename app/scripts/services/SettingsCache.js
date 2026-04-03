@@ -19,7 +19,8 @@ class SettingsCache {
 
   async init() {
     this.#data = await browser.storage.sync.get(KEYS);
-    browser.storage.sync.onChanged.addListener((changes) => {
+    browser.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'sync') return;
       for (const [key, { newValue }] of Object.entries(changes)) {
         this.#data[key] = newValue;
       }

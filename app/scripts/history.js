@@ -20,11 +20,12 @@ function HistoryView() {
       setDownloadHistory(history);
     });
 
-    const listener = (changes) => {
+    const listener = (changes, area) => {
+      if (area !== 'local') return;
       if (changes.history) setDownloadHistory(changes.history.newValue ?? []);
     };
-    browser.storage.local.onChanged.addListener(listener);
-    return () => browser.storage.local.onChanged.removeListener(listener);
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
   }, []);
 
   return (

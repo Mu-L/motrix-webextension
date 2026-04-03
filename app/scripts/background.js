@@ -169,7 +169,8 @@ async function init() {
   const hide = settingsCache.get('hideChromeBar') ?? true;
   browser.downloads.setShelfEnabled?.(!hide && enabled);
 
-  browser.storage.sync.onChanged.addListener((changes) => {
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
     if ('motrixPort' in changes || 'motrixAPIkey' in changes) {
       syncAria2Config();
     }

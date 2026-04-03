@@ -60,11 +60,12 @@ function PopupView() {
       setDownloadHistory(history);
     });
 
-    const listener = (changes) => {
+    const listener = (changes, area) => {
+      if (area !== 'local') return;
       if (changes.history) setDownloadHistory(changes.history.newValue ?? []);
     };
-    browser.storage.local.onChanged.addListener(listener);
-    return () => browser.storage.local.onChanged.removeListener(listener);
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
   }, []);
 
   useEffect(() => {
@@ -75,12 +76,13 @@ function PopupView() {
         setShowOnlyAriaDownloads(showOnlyAria ?? false);
       });
 
-    const listener = (changes) => {
+    const listener = (changes, area) => {
+      if (area !== 'sync') return;
       if (changes.extensionStatus) setExtensionStatus(changes.extensionStatus.newValue);
       if (changes.showOnlyAria) setShowOnlyAriaDownloads(changes.showOnlyAria.newValue);
     };
-    browser.storage.sync.onChanged.addListener(listener);
-    return () => browser.storage.sync.onChanged.removeListener(listener);
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
   }, []);
 
   const onExtensionStatusChange = (status) => {
