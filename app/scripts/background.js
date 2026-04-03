@@ -14,15 +14,18 @@ async function menuClickHandler(data) {
 }
 
 // IDs of browser downloads we intentionally erased after redirecting to aria2.
-// Prevents the onErased listener from deleting their store entries.
 const redirectedToAria = new Set();
-
-// Prevents duplicate listener registration if init() is called more than once
-// (e.g. both onInstalled and onStartup fire for the same service worker instance).
-let initialized = false;
 
 // Prevents processing the same download twice if onCreated fires more than once.
 const processingDownloads = new Set();
+
+// Lazy init: shared promise so concurrent wake-ups only initialise once per SW lifecycle.
+let initPromise = null;
+
+function ensureInitialized() {
+  if (!initPromise) initPromise = init();
+  return initPromise;
+}
 
 function syncAria2Config() {
   aria2Service.configure({
@@ -35,6 +38,8 @@ function syncAria2Config() {
 }
 
 async function handleDownload(downloadItem) {
+  await ensureInitialized();
+
   if (processingDownloads.has(downloadItem.id)) return;
   processingDownloads.add(downloadItem.id);
 
@@ -156,9 +161,6 @@ export function createMenuItem() {
 }
 
 async function init() {
-  if (initialized) return;
-  initialized = true;
-
   await settingsCache.init();
   await downloadStore.init();
 
@@ -181,18 +183,26 @@ async function init() {
     }
   });
 
-  browser.downloads.onCreated.addListener(handleDownload);
-
-  browser.downloads.onErased.addListener((id) => {
-    if (redirectedToAria.has(id)) {
-      redirectedToAria.delete(id);
-      return;
-    }
-    downloadStore.delete(id);
-  });
-
   createMenuItem();
 }
 
-browser.runtime.onInstalled.addListener(init);
-browser.runtime.onStartup.addListener(init);
+// ─── TOP-LEVEL LISTENER REGISTRATION ────────────────────────────────────────
+// In MV3, the service worker wakes up fresh for every event. Listeners MUST be
+// registered synchronously at the top level so Chrome can dispatch events to
+// them. Putting them inside onInstalled/onStartup meant they were never
+// registered in subsequent wake cycles, silently dropping all downloads.
+
+browser.downloads.onCreated.addListener(handleDownload);
+
+browser.downloads.onErased.addListener(async (id) => {
+  await ensureInitialized();
+  if (redirectedToAria.has(id)) {
+    redirectedToAria.delete(id);
+    return;
+  }
+  downloadStore.delete(id);
+});
+
+// onInstalled / onStartup pre-warm init so the first download is snappier
+browser.runtime.onInstalled.addListener(ensureInitialized);
+browser.runtime.onStartup.addListener(ensureInitialized);
