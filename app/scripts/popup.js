@@ -12,7 +12,6 @@ import PropTypes from 'prop-types';
 import * as browser from 'webextension-polyfill';
 
 function OptProgress({ status, downloaded, size }) {
-  console.log(status, downloaded, size);
   if (status !== 'downloading') return null;
   if (downloaded != null && size != null && size > 0) {
     return (
@@ -33,27 +32,15 @@ OptProgress.propTypes = {
 };
 
 function FolderButton({ element }) {
-  console.log(element);
   if (element.status !== 'completed') return null;
 
-  let onClick;
-
-  if (element.manager === 'browser') {
-    onClick = () => {
-      browser.downloads.show(element.gid);
-    };
-  } else {
-    onClick = () => {
-      browser.tabs.create({ url: 'motrix://' });
-    };
-  }
+  const onClick =
+    element.downloader === 'browser'
+      ? () => browser.downloads.show(element.gid)
+      : () => browser.tabs.create({ url: 'motrix://' });
 
   return (
-    <IconButton
-      variant="outlined"
-      // onClick={() => browser.tabs.create({ url: el.path })}
-      onClick={onClick}
-    >
+    <IconButton variant="outlined" onClick={onClick}>
       <FolderIcon />
     </IconButton>
   );
@@ -66,37 +53,35 @@ FolderButton.propTypes = {
 function PopupView() {
   const [downloadHistory, setDownloadHistory] = useState([]);
   const [extensionStatus, setExtensionStatus] = useState(false);
-  const [showOnlyAriaDownloads, setShowOnlyAriaDownloads] = useState(true);
+  const [showOnlyAriaDownloads, setShowOnlyAriaDownloads] = useState(false);
 
   useEffect(() => {
-    const updateHistory = async () => {
-      const { history = [] } = await browser.storage.local.get(['history']);
-      setDownloadHistory(history ?? []);
-    };
-    const inter = setInterval(updateHistory, 1000);
-    updateHistory();
+    browser.storage.local.get(['history']).then(({ history = [] }) => {
+      setDownloadHistory(history);
+    });
 
-    return () => {
-      clearInterval(inter);
+    const listener = (changes) => {
+      if (changes.history) setDownloadHistory(changes.history.newValue ?? []);
     };
-  }, [setDownloadHistory]);
+    browser.storage.local.onChanged.addListener(listener);
+    return () => browser.storage.local.onChanged.removeListener(listener);
+  }, []);
 
   useEffect(() => {
-    const updateStatus = () => {
-      browser.storage.sync
-        .get(['extensionStatus', 'showOnlyAria'])
-        .then((r) => {
-          setExtensionStatus(r.extensionStatus);
-          setShowOnlyAriaDownloads(r.showOnlyAria ?? false);
-        });
-    };
-    const inter = setInterval(updateStatus, 1000);
-    updateStatus();
+    browser.storage.sync
+      .get(['extensionStatus', 'showOnlyAria'])
+      .then(({ extensionStatus: status, showOnlyAria }) => {
+        setExtensionStatus(status ?? false);
+        setShowOnlyAriaDownloads(showOnlyAria ?? false);
+      });
 
-    return () => {
-      clearInterval(inter);
+    const listener = (changes) => {
+      if (changes.extensionStatus) setExtensionStatus(changes.extensionStatus.newValue);
+      if (changes.showOnlyAria) setShowOnlyAriaDownloads(changes.showOnlyAria.newValue);
     };
-  }, [setDownloadHistory]);
+    browser.storage.sync.onChanged.addListener(listener);
+    return () => browser.storage.sync.onChanged.removeListener(listener);
+  }, []);
 
   const onExtensionStatusChange = (status) => {
     browser.storage.sync.set({ extensionStatus: status });
@@ -107,7 +92,6 @@ function PopupView() {
   const parseName = (name) => {
     if (name == null) return 'unknown';
     if (name.length < 52) return name;
-
     return `${name.slice(0, 52)}...`;
   };
 
@@ -122,13 +106,19 @@ function PopupView() {
         </IconButton>
       </Grid>
       <Grid item xs={2}>
-        <IconButton variant="outlined" onClick={() => open('./config.html')}>
+        <IconButton
+          variant="outlined"
+          onClick={() => browser.tabs.create({ url: browser.runtime.getURL('pages/config.html') })}
+        >
           <SettingsIcon />
         </IconButton>
       </Grid>
       <Grid item xs={1} />
       <Grid item xs={2}>
-        <IconButton variant="outlined" onClick={() => open('./history.html')}>
+        <IconButton
+          variant="outlined"
+          onClick={() => browser.tabs.create({ url: browser.runtime.getURL('pages/history.html') })}
+        >
           <HistoryIcon />
         </IconButton>
       </Grid>
@@ -136,14 +126,8 @@ function PopupView() {
         <IconButton
           variant="outlined"
           onClick={() => {
-            if (
-              confirm(
-                'Are you sure want to remove all of your download history?'
-              )
-            ) {
-              setDownloadHistory([]);
-              browser.storage.local.set({ history: [] });
-            }
+            setDownloadHistory([]);
+            browser.storage.local.set({ history: [], downloads: {} });
           }}
         >
           <ClearAllIcon />
@@ -158,55 +142,50 @@ function PopupView() {
         </IconButton>
       </Grid>
       <Grid item xs={11}>
-        {downloadHistory &&
-          downloadHistory
-            .filter((el) => !showOnlyAriaDownloads || el.downloader === 'aria')
-            .slice(0, 4)
-            .map((el) => (
-              <Paper
-                key={el.gid}
-                style={{ display: 'flex', marginBottom: '8px' }}
+        {downloadHistory
+          .filter((el) => !showOnlyAriaDownloads || el.downloader === 'aria')
+          .slice(0, 4)
+          .map((el) => (
+            <Paper key={el.gid} style={{ display: 'flex', marginBottom: '8px' }}>
+              <div
+                style={{
+                  padding: '8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                }}
               >
-                <div
-                  style={{
-                    padding: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <img src={el.icon ?? ''} alt="icon" />
-                </div>
-                <div
-                  style={{
-                    padding: '8px',
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <div className="text">{parseName(el.name)}</div>
-
-                  <OptProgress
-                    status={el.status}
-                    downloaded={el.downloaded}
-                    size={el.size}
-                  />
-                </div>
-                <div
-                  style={{
-                    padding: '4px',
-                    minWidth: '50px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <FolderButton element={el} />
-                </div>
-              </Paper>
-            ))}
+                <img src={el.icon ?? ''} alt="icon" />
+              </div>
+              <div
+                style={{
+                  padding: '8px',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                }}
+              >
+                <div className="text">{parseName(el.name)}</div>
+                <OptProgress
+                  status={el.status}
+                  downloaded={el.downloaded}
+                  size={el.size}
+                />
+              </div>
+              <div
+                style={{
+                  padding: '4px',
+                  minWidth: '50px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                }}
+              >
+                <FolderButton element={el} />
+              </div>
+            </Paper>
+          ))}
       </Grid>
     </Grid>
   );

@@ -1,0 +1,69 @@
+import * as browser from 'webextension-polyfill';
+import { isFirefox } from '../utils';
+
+function setExtensionIcon(filename) {
+  const path = browser.runtime.getURL(`images/${filename}`);
+  if (isFirefox) {
+    browser.browserAction.setIcon({ path });
+  } else {
+    browser.action.setIcon({ path });
+  }
+}
+
+export function trackWithAria2(gid, browserDownloadId, store, aria2Service) {
+  let cancelled = false;
+  let polling = false;
+  let progressInterval = null;
+
+  const cleanup = () => {
+    cancelled = true;
+    clearInterval(progressInterval);
+    aria2Service.unregister(gid);
+  };
+
+  // aria2 has no progress event — poll only for bytes downloaded.
+  // The polling lock prevents concurrent calls if getStatus takes >1s.
+  progressInterval = setInterval(async () => {
+    if (cancelled || polling) return;
+    polling = true;
+    try {
+      const status = await aria2Service.getStatus(gid);
+      if (!cancelled) {
+        await store.upsert(browserDownloadId, {
+          downloaded: parseInt(status.completedLength, 10),
+          size: parseInt(status.totalLength, 10),
+        });
+      }
+    } catch {
+      cleanup();
+    } finally {
+      polling = false;
+    }
+  }, 1000);
+
+  aria2Service.register(gid, {
+    onStart: async () => {
+      setExtensionIcon('dwld.png');
+      await store.upsert(browserDownloadId, { status: 'downloading' });
+    },
+    onComplete: async () => {
+      cleanup();
+      await store.upsert(browserDownloadId, { status: 'completed' });
+      if (!store.getAll().some((d) => d.status === 'downloading')) {
+        setTimeout(() => {
+          if (!store.getAll().some((d) => d.status === 'downloading')) {
+            setExtensionIcon('32.png');
+          }
+        }, 1000);
+      }
+    },
+    onStop: async () => {
+      cleanup();
+      await store.upsert(browserDownloadId, { status: 'stop' });
+    },
+    onError: async () => {
+      cleanup();
+      await store.upsert(browserDownloadId, { status: 'error' });
+    },
+  });
+}

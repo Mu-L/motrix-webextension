@@ -14,18 +14,18 @@ import * as browser from 'webextension-polyfill';
 
 function HistoryView() {
   const [downloadHistory, setDownloadHistory] = useState([]);
-  useEffect(() => {
-    const updateHistory = async () => {
-      const { history = [] } = await browser.storage.local.get(['history']);
-      setDownloadHistory(history ?? []);
-    };
-    const inter = setInterval(updateHistory, 1000);
-    updateHistory();
 
-    return () => {
-      clearInterval(inter);
+  useEffect(() => {
+    browser.storage.local.get(['history']).then(({ history = [] }) => {
+      setDownloadHistory(history);
+    });
+
+    const listener = (changes) => {
+      if (changes.history) setDownloadHistory(changes.history.newValue ?? []);
     };
-  }, [setDownloadHistory]);
+    browser.storage.local.onChanged.addListener(listener);
+    return () => browser.storage.local.onChanged.removeListener(listener);
+  }, []);
 
   return (
     <Container style={{ marginTop: '8px', minHeight: '100vh' }}>
@@ -44,7 +44,7 @@ function HistoryView() {
                   justifyContent: 'center',
                 }}
               >
-                <img src={el.icon ?? ''} />
+                <img src={el.icon ?? ''} alt="icon" />
               </div>
               <div
                 style={{
@@ -76,7 +76,11 @@ function HistoryView() {
                 {el.status === 'completed' ? (
                   <IconButton
                     variant="outlined"
-                    onClick={() => browser.tabs.create({ url: 'motrix://' })}
+                    onClick={() =>
+                      el.downloader === 'browser'
+                        ? browser.downloads.show(el.gid)
+                        : browser.tabs.create({ url: 'motrix://' })
+                    }
                   >
                     <FolderIcon />
                   </IconButton>
