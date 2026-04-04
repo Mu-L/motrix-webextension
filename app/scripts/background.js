@@ -51,8 +51,13 @@ async function handleDownload(downloadItem) {
       return;
     }
 
-    // Pause immediately — before any async work — to minimise bytes the browser downloads
-    await browser.downloads.pause(downloadItem.id).catch(() => {});
+    // When the browser's 'Prompt before download' (Save As dialog) is enabled, Chrome
+    // creates the download item with an empty filename and blocks until the user confirms.
+    // pause() fails silently in that state, so we detect it and defer the call.
+    const promptBeforeDownload = !downloadItem.filename;
+    if (!promptBeforeDownload) {
+      await browser.downloads.pause(downloadItem.id).catch(() => {});
+    }
 
     if (!settings.motrixAPIkey) {
       await notify(
@@ -78,6 +83,10 @@ async function handleDownload(downloadItem) {
         waitForFilename(downloadItem.id),
         browser.cookies.getAll({ url: downloadItem.url }),
       ]);
+
+      if (promptBeforeDownload) {
+        await browser.downloads.pause(downloadItem.id).catch(() => {});
+      }
 
       const path = parsePath(filename);
       const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');

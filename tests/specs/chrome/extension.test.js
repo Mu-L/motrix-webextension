@@ -579,7 +579,89 @@ test.describe('History Page', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 7. File Cleanup
+// 7. Prompt Before Download (auto-detection)
+// ══════════════════════════════════════════════════════════════════════════════
+test.describe('Prompt Before Download', () => {
+  // A separate browser context with prompt_for_download: true.
+  // In headless=new Chrome, the Save As dialog is auto-dismissed so the download
+  // proceeds normally — this verifies the auto-detection doesn't break interception.
+  let pbdContext;
+  let pbdExtensionId;
+  let pdbUserDataDir;
+
+  test.beforeAll(async () => {
+    pdbUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motrix-pbd-'));
+    const defaultDir = path.join(pdbUserDataDir, 'Default');
+    fs.mkdirSync(defaultDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(defaultDir, 'Preferences'),
+      JSON.stringify({
+        download: {
+          default_directory: DOWNLOAD_DIR,
+          prompt_for_download: true,
+          directory_upgrade: true,
+        },
+        safebrowsing: { enabled: false },
+        profile: { default_content_setting_values: { notifications: 2 } },
+      })
+    );
+
+    pbdContext = await chromium.launchPersistentContext(pdbUserDataDir, {
+      headless: false,
+      executablePath: chromium.executablePath(),
+      args: [
+        '--headless=new',
+        `--disable-extensions-except=${EXTENSION_PATH}`,
+        `--load-extension=${EXTENSION_PATH}`,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-notifications',
+      ],
+      ignoreDefaultArgs: ['--disable-extensions'],
+    });
+
+    let sw = pbdContext.serviceWorkers()[0];
+    if (!sw) sw = await pdbContext.waitForEvent('serviceworker');
+    pbdExtensionId = sw.url().split('/')[2];
+
+    const configPage = await pdbContext.newPage();
+    await configPage.goto(`chrome-extension://${pdbExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
+    await configPage.evaluate(async (s) => { await chrome.storage.sync.set(s); }, DEFAULT_SETTINGS);
+    await configPage.waitForTimeout(400);
+    await configPage.close();
+  });
+
+  test.afterAll(async () => {
+    await pdbContext?.close();
+    if (pdbUserDataDir) fs.rmSync(pdbUserDataDir, { recursive: true, force: true });
+  });
+
+  test('download is intercepted when prompt_for_download is enabled', async () => {
+    const mockAria2Pbd = new MockAria2Server(16_801);
+    await mockAria2Pbd.start();
+
+    try {
+      const configPage = await pdbContext.newPage();
+      await configPage.goto(`chrome-extension://${pdbExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
+      await configPage.evaluate(async (s) => { await chrome.storage.sync.set(s); }, { ...DEFAULT_SETTINGS, motrixPort: 16_801 });
+      await configPage.waitForTimeout(400);
+      await configPage.close();
+
+      const page = await pdbContext.newPage();
+      await page.goto(`http://127.0.0.1:${FILE_SERVER_PORT}`, { waitUntil: 'domcontentloaded' });
+      await page.click('#large-download');
+      await waitFor(() => mockAria2Pbd.getCalls('addUri').length > 0, 30_000);
+      expect(mockAria2Pbd.getCalls('addUri')).toHaveLength(1);
+      await page.close();
+    } finally {
+      await mockAria2Pbd.stop();
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 9. File Cleanup
 // ══════════════════════════════════════════════════════════════════════════════
 test.describe('File Cleanup', () => {
   test('cleanupDownloads removes files from the download directory', () => {
