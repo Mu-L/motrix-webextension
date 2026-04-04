@@ -49,6 +49,12 @@ let userDataDir;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Count non-hidden files in the download directory. */
+function countDownloads() {
+  if (!fs.existsSync(DOWNLOAD_DIR)) return 0;
+  return fs.readdirSync(DOWNLOAD_DIR).filter((f) => !f.startsWith('.')).length;
+}
+
 // ── Extension helpers ──────────────────────────────────────────────────────────
 
 /** Set extension settings via chrome.storage.sync from the extension's config page. */
@@ -187,6 +193,8 @@ test.beforeAll(async () => {
   context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     executablePath: chromium.executablePath(),
+    acceptDownloads: true,
+    downloadsPath: DOWNLOAD_DIR,
     args: [
       '--headless=new',
       `--disable-extensions-except=${EXTENSION_PATH}`,
@@ -213,7 +221,7 @@ test.afterAll(async () => {
   if (userDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
   await mockAria2?.stop();
   await fileServer?.stop();
-  cleanupDownloads();
+  // cleanupDownloads();
 });
 
 test.beforeEach(async () => {
@@ -296,6 +304,7 @@ test.describe('Download Interception', () => {
     await page.click('#large-download');
     await waitFor(() => mockAria2.getCalls('addUri').length > 0, 25_000);
     expect(mockAria2.getCalls('addUri')).toHaveLength(1);
+    expect(countDownloads()).toBe(0);
     await page.close();
   });
 
@@ -304,6 +313,7 @@ test.describe('Download Interception', () => {
     await page.click('#large-download');
     await waitFor(() => mockAria2.getCalls('addUri').length > 0, 25_000);
     expect(mockAria2.getCalls('addUri')[0].params[0]).toBe(`token:${TEST_API_KEY}`);
+    expect(countDownloads()).toBe(0);
     await page.close();
   });
 
@@ -314,6 +324,7 @@ test.describe('Download Interception', () => {
     const urls = mockAria2.getCalls('addUri')[0].params[1];
     expect(Array.isArray(urls)).toBe(true);
     expect(urls[0]).toContain('/files/large.bin');
+    expect(countDownloads()).toBe(0);
     await page.close();
   });
 
@@ -329,6 +340,7 @@ test.describe('Download Interception', () => {
     // the correct file was targeted.
     expect(typeof options.out).toBe('string');
     expect(options.out.length).toBeGreaterThan(0);
+    expect(countDownloads()).toBe(0);
     await page.close();
   });
 
@@ -341,6 +353,7 @@ test.describe('Download Interception', () => {
       ? fs.readdirSync(DOWNLOAD_DIR).filter((f) => f.endsWith('.crdownload'))
       : [];
     expect(crdownloads).toHaveLength(0);
+    expect(countDownloads()).toBe(0);
     await page.close();
   });
 
@@ -358,6 +371,7 @@ test.describe('Download Interception', () => {
     await p2.close();
 
     expect(mockAria2.getCalls('addUri')).toHaveLength(1);
+    expect(countDownloads()).toBe(0);
   });
 });
 
@@ -371,6 +385,7 @@ test.describe('Bypass Scenarios', () => {
     await page.click('#small-download');
     await sleep(4_000);
     expect(mockAria2.getCalls('addUri')).toHaveLength(0);
+    expect(countDownloads()).toBe(1);
     await page.close();
     await restoreDefaults();
   });
@@ -381,6 +396,7 @@ test.describe('Bypass Scenarios', () => {
     await page.click('#blacklisted-download');
     await sleep(4_000);
     expect(mockAria2.getCalls('addUri')).toHaveLength(0);
+    expect(countDownloads()).toBe(1);
     await page.close();
     await restoreDefaults();
   });
@@ -391,6 +407,7 @@ test.describe('Bypass Scenarios', () => {
     await page.click('#mini-download');
     await sleep(4_000);
     expect(mockAria2.getCalls('addUri')).toHaveLength(0);
+    expect(countDownloads()).toBe(1);
     await page.close();
     await restoreDefaults();
   });
@@ -401,6 +418,7 @@ test.describe('Bypass Scenarios', () => {
     await page.click('#large-download');
     await waitFor(() => mockAria2.getCalls('addUri').length > 0, 25_000);
     expect(mockAria2.getCalls('addUri')).toHaveLength(1);
+    expect(countDownloads()).toBe(0);
     await page.close();
     await restoreDefaults();
   });
@@ -442,6 +460,8 @@ test.describe('Fallback Behaviour', () => {
 
     // Aria2 was unreachable — no addUri should have reached the mock
     expect(mockAria2.getCalls('addUri')).toHaveLength(0);
+    // Browser took over — a file should have landed in the download dir
+    expect(countDownloads()).toBeGreaterThan(0);
 
     // Cancel the lingering browser download
     await configPage.evaluate(async (url) => {
@@ -463,12 +483,7 @@ test.describe('Fallback Behaviour', () => {
     try {
       await page.click('#large-download');
       await sleep(8_000);
-      const completed = fs.existsSync(DOWNLOAD_DIR)
-        ? fs.readdirSync(DOWNLOAD_DIR).filter(
-            (f) => !f.endsWith('.crdownload') && !f.startsWith('.')
-          )
-        : [];
-      expect(completed).toHaveLength(0);
+      expect(countDownloads()).toBe(0);
     } finally {
       await page.close();
       await restoreDefaults();
@@ -574,6 +589,7 @@ test.describe('History Page', () => {
     expect(errors).toHaveLength(0);
     const content = await histPage.evaluate(() => document.body.innerHTML);
     expect(content.length).toBeGreaterThan(100);
+    expect(countDownloads()).toBe(0);
     await histPage.close();
   });
 });
@@ -587,11 +603,11 @@ test.describe('Prompt Before Download', () => {
   // proceeds normally — this verifies the auto-detection doesn't break interception.
   let pbdContext;
   let pbdExtensionId;
-  let pdbUserDataDir;
+  let pbdUserDataDir;
 
   test.beforeAll(async () => {
-    pdbUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motrix-pbd-'));
-    const defaultDir = path.join(pdbUserDataDir, 'Default');
+    pbdUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motrix-pbd-'));
+    const defaultDir = path.join(pbdUserDataDir, 'Default');
     fs.mkdirSync(defaultDir, { recursive: true });
     fs.writeFileSync(
       path.join(defaultDir, 'Preferences'),
@@ -606,9 +622,11 @@ test.describe('Prompt Before Download', () => {
       })
     );
 
-    pbdContext = await chromium.launchPersistentContext(pdbUserDataDir, {
+    pbdContext = await chromium.launchPersistentContext(pbdUserDataDir, {
       headless: false,
       executablePath: chromium.executablePath(),
+      acceptDownloads: true,
+      downloadsPath: DOWNLOAD_DIR,
       args: [
         '--headless=new',
         `--disable-extensions-except=${EXTENSION_PATH}`,
@@ -622,19 +640,19 @@ test.describe('Prompt Before Download', () => {
     });
 
     let sw = pbdContext.serviceWorkers()[0];
-    if (!sw) sw = await pdbContext.waitForEvent('serviceworker');
+    if (!sw) sw = await pbdContext.waitForEvent('serviceworker');
     pbdExtensionId = sw.url().split('/')[2];
 
-    const configPage = await pdbContext.newPage();
-    await configPage.goto(`chrome-extension://${pdbExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
+    const configPage = await pbdContext.newPage();
+    await configPage.goto(`chrome-extension://${pbdExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
     await configPage.evaluate(async (s) => { await chrome.storage.sync.set(s); }, DEFAULT_SETTINGS);
     await configPage.waitForTimeout(400);
     await configPage.close();
   });
 
   test.afterAll(async () => {
-    await pdbContext?.close();
-    if (pdbUserDataDir) fs.rmSync(pdbUserDataDir, { recursive: true, force: true });
+    await pbdContext?.close();
+    if (pbdUserDataDir) fs.rmSync(pbdUserDataDir, { recursive: true, force: true });
   });
 
   test('download is intercepted when prompt_for_download is enabled', async () => {
@@ -642,17 +660,18 @@ test.describe('Prompt Before Download', () => {
     await mockAria2Pbd.start();
 
     try {
-      const configPage = await pdbContext.newPage();
-      await configPage.goto(`chrome-extension://${pdbExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
+      const configPage = await pbdContext.newPage();
+      await configPage.goto(`chrome-extension://${pbdExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
       await configPage.evaluate(async (s) => { await chrome.storage.sync.set(s); }, { ...DEFAULT_SETTINGS, motrixPort: 16_801 });
       await configPage.waitForTimeout(400);
       await configPage.close();
 
-      const page = await pdbContext.newPage();
+      const page = await pbdContext.newPage();
       await page.goto(`http://127.0.0.1:${FILE_SERVER_PORT}`, { waitUntil: 'domcontentloaded' });
       await page.click('#large-download');
       await waitFor(() => mockAria2Pbd.getCalls('addUri').length > 0, 30_000);
       expect(mockAria2Pbd.getCalls('addUri')).toHaveLength(1);
+      expect(countDownloads()).toBe(0);
       await page.close();
     } finally {
       await mockAria2Pbd.stop();
