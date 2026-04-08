@@ -102,6 +102,7 @@ async function handleDownload(downloadItem) {
         aria2Service.addUri(downloadUrl, params),
         browser.downloads.getFileIcon(downloadItem.id).catch(() => ''),
       ]);
+      browser.storage.local.set({ motrixReachable: true }).catch(() => {});
 
       // Mark before erasing so onErased doesn't delete the store entry
       redirectedToAria.add(downloadItem.id);
@@ -127,19 +128,15 @@ async function handleDownload(downloadItem) {
       }
     } catch (error) {
       console.error('Motrix WebExtension: failed to send to Motrix:', error);
+      browser.storage.local.set({ motrixReachable: false }).catch(() => {});
 
       if (settings.downloadFallback !== false) {
         await browser.downloads.resume(downloadItem.id).catch(() => {});
         trackWithBrowser(downloadItem, downloadStore);
-        await notify('Motrix not reachable', 'Falling back to browser download');
       } else {
         redirectedToAria.add(downloadItem.id);
         await browser.downloads.cancel(downloadItem.id).catch(() => {});
         await browser.downloads.erase({ id: downloadItem.id }).catch(() => {});
-        await notify(
-          'Motrix not reachable',
-          'Download cancelled. Enable fallback in settings to use the browser.'
-        );
         await downloadStore.delete(downloadItem.id);
       }
     }
@@ -195,6 +192,16 @@ async function init() {
   createMenuItem();
 }
 
+async function checkMotrixStatus() {
+  await ensureInitialized();
+  try {
+    await aria2Service.ping();
+    await browser.storage.local.set({ motrixReachable: true });
+  } catch {
+    await browser.storage.local.set({ motrixReachable: false });
+  }
+}
+
 // ─── TOP-LEVEL LISTENER REGISTRATION ────────────────────────────────────────
 // In MV3, the service worker wakes up fresh for every event. Listeners MUST be
 // registered synchronously at the top level so Chrome can dispatch events to
@@ -215,3 +222,9 @@ browser.downloads.onErased.addListener(async (id) => {
 // onInstalled / onStartup pre-warm init so the first download is snappier
 browser.runtime.onInstalled.addListener(ensureInitialized);
 browser.runtime.onStartup.addListener(ensureInitialized);
+
+browser.runtime.onMessage.addListener((message) => {
+  if (message?.type === 'checkMotrixStatus') {
+    checkMotrixStatus();
+  }
+});

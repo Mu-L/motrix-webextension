@@ -1,5 +1,5 @@
 'use strict';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Grid, Paper, IconButton, LinearProgress } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -10,6 +10,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import createThemed from './createThemed';
 import PropTypes from 'prop-types';
 import * as browser from 'webextension-polyfill';
+import { useBrowserStorage } from './hooks/useBrowserStorage';
 
 function OptProgress({ status, downloaded, size }) {
   if (status !== 'downloading') return null;
@@ -51,44 +52,16 @@ FolderButton.propTypes = {
 };
 
 function PopupView() {
-  const [downloadHistory, setDownloadHistory] = useState([]);
-  const [extensionStatus, setExtensionStatus] = useState(false);
-  const [showOnlyAriaDownloads, setShowOnlyAriaDownloads] = useState(false);
+  const { history: downloadHistory = [], motrixReachable = null } = useBrowserStorage('local', ['history', 'motrixReachable']);
+  const { extensionStatus = false, showOnlyAria: showOnlyAriaDownloads = false } = useBrowserStorage('sync', ['extensionStatus', 'showOnlyAria']);
 
   useEffect(() => {
-    browser.storage.local.get(['history']).then(({ history = [] }) => {
-      setDownloadHistory(history);
-    });
-
-    const listener = (changes, area) => {
-      if (area !== 'local') return;
-      if (changes.history) setDownloadHistory(changes.history.newValue ?? []);
-    };
-    browser.storage.onChanged.addListener(listener);
-    return () => browser.storage.onChanged.removeListener(listener);
-  }, []);
-
-  useEffect(() => {
-    browser.storage.sync
-      .get(['extensionStatus', 'showOnlyAria'])
-      .then(({ extensionStatus: status, showOnlyAria }) => {
-        setExtensionStatus(status ?? false);
-        setShowOnlyAriaDownloads(showOnlyAria ?? false);
-      });
-
-    const listener = (changes, area) => {
-      if (area !== 'sync') return;
-      if (changes.extensionStatus) setExtensionStatus(changes.extensionStatus.newValue);
-      if (changes.showOnlyAria) setShowOnlyAriaDownloads(changes.showOnlyAria.newValue);
-    };
-    browser.storage.onChanged.addListener(listener);
-    return () => browser.storage.onChanged.removeListener(listener);
+    browser.runtime.sendMessage({ type: 'checkMotrixStatus' }).catch(() => {});
   }, []);
 
   const onExtensionStatusChange = (status) => {
     browser.storage.sync.set({ extensionStatus: status });
     if (!status) browser.downloads.setShelfEnabled?.(true);
-    setExtensionStatus(status);
   };
 
   const parseName = (name) => {
@@ -128,7 +101,6 @@ function PopupView() {
         <IconButton
           variant="outlined"
           onClick={() => {
-            setDownloadHistory([]);
             browser.storage.local.set({ history: [], downloads: {} });
           }}
         >
@@ -143,6 +115,31 @@ function PopupView() {
           <FolderIcon />
         </IconButton>
       </Grid>
+      {motrixReachable === false && (
+        <Grid item xs={11}>
+          <Paper
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              backgroundColor: '#fff3e0',
+            }}
+          >
+            <span style={{ fontSize: '13px', color: '#e65100' }}>
+              Motrix is not reachable. Please open Motrix.
+            </span>
+            <IconButton
+              size="small"
+              onClick={() => browser.tabs.create({ url: 'motrix://' })}
+              style={{ color: '#e65100' }}
+            >
+              <PowerSettingsNewIcon fontSize="small" />
+            </IconButton>
+          </Paper>
+        </Grid>
+      )}
       <Grid item xs={11}>
         {downloadHistory
           .filter((el) => !showOnlyAriaDownloads || el.downloader === 'aria')

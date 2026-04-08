@@ -63,6 +63,11 @@ class Aria2Service {
     return this.#connectingPromise;
   }
 
+  async ping() {
+    const conn = await this.#getConnection();
+    await conn.call('getVersion');
+  }
+
   async addUri(url, params) {
     const conn = await this.#getConnection();
     return conn.call('addUri', [url], params);

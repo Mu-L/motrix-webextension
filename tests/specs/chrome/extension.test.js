@@ -23,7 +23,7 @@ const { DOWNLOAD_DIR, cleanupDownloads, waitFor } = require('../../helpers/exten
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const EXTENSION_PATH = path.resolve(__dirname, '../../../dist/chrome');
-const ARIA2_PORT = 16800;
+const ARIA2_PORT = 16900;
 const FILE_SERVER_PORT = 8080;
 const TEST_API_KEY = 'e2e-test-secret';
 
@@ -128,6 +128,36 @@ async function suppressExtensionNotifications() {
       };
     }
   });
+}
+
+/** Read a value from chrome.storage.local. */
+async function readLocalStorage(key) {
+  const page = await context.newPage();
+  try {
+    await page.goto(`chrome-extension://${extensionId}/pages/config.html`, {
+      waitUntil: 'domcontentloaded',
+    });
+    return await page.evaluate(
+      (k) => new Promise((r) => chrome.storage.local.get(k, (res) => r(res[k]))),
+      key
+    );
+  } finally {
+    await page.close();
+  }
+}
+
+/** Write values into chrome.storage.local. */
+async function setLocalStorage(obj) {
+  const page = await context.newPage();
+  try {
+    await page.goto(`chrome-extension://${extensionId}/pages/config.html`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.evaluate((o) => chrome.storage.local.set(o), obj);
+    await page.waitForTimeout(200);
+  } finally {
+    await page.close();
+  }
 }
 
 /** Open a fresh page pointing at the file server index. */
@@ -656,13 +686,13 @@ test.describe('Prompt Before Download', () => {
   });
 
   test('download is intercepted when prompt_for_download is enabled', async () => {
-    const mockAria2Pbd = new MockAria2Server(16_801);
+    const mockAria2Pbd = new MockAria2Server(16_901);
     await mockAria2Pbd.start();
 
     try {
       const configPage = await pbdContext.newPage();
       await configPage.goto(`chrome-extension://${pbdExtensionId}/pages/config.html`, { waitUntil: 'domcontentloaded' });
-      await configPage.evaluate(async (s) => { await chrome.storage.sync.set(s); }, { ...DEFAULT_SETTINGS, motrixPort: 16_801 });
+      await configPage.evaluate(async (s) => { await chrome.storage.sync.set(s); }, { ...DEFAULT_SETTINGS, motrixPort: 16_901 });
       await configPage.waitForTimeout(400);
       await configPage.close();
 
@@ -676,6 +706,75 @@ test.describe('Prompt Before Download', () => {
     } finally {
       await mockAria2Pbd.stop();
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 8. Motrix Reachability
+// ══════════════════════════════════════════════════════════════════════════════
+test.describe('Motrix Reachability', () => {
+  test.afterEach(async () => {
+    await setLocalStorage({ motrixReachable: null });
+  });
+
+  test('motrixReachable is set to true after a successful intercept', async () => {
+    const page = await openFileServerPage();
+    await page.click('#large-download');
+    await waitFor(() => mockAria2.getCalls('addUri').length > 0, 25_000);
+    await waitFor(async () => (await readLocalStorage('motrixReachable')) === true, 5_000);
+    expect(await readLocalStorage('motrixReachable')).toBe(true);
+    await page.close();
+  });
+
+  test('motrixReachable is set to false when Aria2 is unreachable', async () => {
+    await configureExtension({ motrixPort: 19_999, downloadFallback: true });
+    const page = await openFileServerPage();
+    await page.click('#mini-download');
+    await waitFor(async () => (await readLocalStorage('motrixReachable')) === false, 15_000, 500);
+    expect(await readLocalStorage('motrixReachable')).toBe(false);
+    await page.close();
+    await restoreDefaults();
+  });
+
+  test('popup shows reachability banner when motrixReachable is false', async () => {
+    // Reject aria2 connections so the on-open ping also fails and doesn't clear the flag
+    mockAria2.setRejectConnections(true);
+    try {
+      await setLocalStorage({ motrixReachable: false });
+      const page = await context.newPage();
+      await page.goto(`chrome-extension://${extensionId}/pages/popup.html`, {
+        waitUntil: 'networkidle',
+      });
+      await sleep(1_000);
+      await expect(page.locator('text=Motrix is not reachable')).toBeVisible();
+      await page.close();
+    } finally {
+      mockAria2.setRejectConnections(false);
+    }
+  });
+
+  test('popup does not show banner when motrixReachable is true', async () => {
+    await setLocalStorage({ motrixReachable: true });
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/pages/popup.html`, {
+      waitUntil: 'networkidle',
+    });
+    await sleep(500);
+    await expect(page.locator('text=Motrix is not reachable')).toHaveCount(0);
+    await page.close();
+  });
+
+  test('opening popup with Motrix running clears the unreachable flag', async () => {
+    await setLocalStorage({ motrixReachable: false });
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/pages/popup.html`, {
+      waitUntil: 'networkidle',
+    });
+    // Popup sends checkMotrixStatus on mount; background pings mock aria2 (running)
+    await waitFor(async () => (await readLocalStorage('motrixReachable')) === true, 8_000, 300);
+    expect(await readLocalStorage('motrixReachable')).toBe(true);
+    await expect(page.locator('text=Motrix is not reachable')).toHaveCount(0);
+    await page.close();
   });
 });
 

@@ -109,6 +109,8 @@ class MockAria2Server {
         return this.#onAddUri(ws, id, params);
       case 'aria2.tellStatus':
         return this.#onTellStatus(ws, id, params);
+      case 'aria2.getVersion':
+        return this.#respond(ws, id, { version: '1.36.0', enabledFeatures: [] });
       default:
         // Acknowledge unknown calls so the client doesn't hang
         this.#respond(ws, id, 'OK');
