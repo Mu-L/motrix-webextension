@@ -193,8 +193,8 @@ async function init() {
 }
 
 async function checkMotrixStatus() {
-  await ensureInitialized();
   try {
+    await ensureInitialized();
     await aria2Service.ping();
     await browser.storage.local.set({ motrixReachable: true });
   } catch {
