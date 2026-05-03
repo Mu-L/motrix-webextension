@@ -34,6 +34,10 @@ jobs:
   Submit:
     needs: Version
     if: needs.Version.outputs.created
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +60,10 @@ jobs:
       - name: Update extension's meta
         run: >-
           npx dot-json@1 $DIRECTORY/${{ matrix.command }}/manifest.json version ${{ needs.Version.outputs.version }}
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.DIRECTORY }}/${{ matrix.command }}/**
       - name: Submit
         run: |
           case ${{ matrix.command }} in
