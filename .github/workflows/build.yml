@@ -17,6 +17,8 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
 
+      - run: corepack enable
+
       - run: yarn install
 
       - name: Build Chrome
@@ -53,6 +55,8 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
+
+      - run: corepack enable
 
       - name: Install dependencies
         run: yarn install
@@ -93,6 +97,8 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
+
+      - run: corepack enable
 
       - name: Install dependencies
         run: yarn install

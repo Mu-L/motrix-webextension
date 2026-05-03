@@ -27,6 +27,7 @@
     "web-ext": "^10.1.0",
     "ws": "^8.18.0"
   },
+  "packageManager": "yarn@1.22.22",
   "dependencies": {
     "@emotion/react": "^11.4.1",
     "@emotion/styled": "^11.3.0",
