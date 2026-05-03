@@ -15,26 +15,32 @@ export function shouldIntercept(downloadItem, settings) {
   return true;
 }
 
-export async function waitForFilename(downloadId) {
-  // Filename may already be set by the time we're called
+export async function waitForFilename(downloadId, timeoutMs = 30000) {
   const [existing] = await browser.downloads.search({ id: downloadId });
   if (existing?.filename) return existing.filename;
 
   return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      browser.downloads.onChanged.removeListener(changedListener);
+      browser.downloads.onErased.removeListener(erasedListener);
+    };
     const changedListener = (delta) => {
       if (delta.id === downloadId && delta.filename?.current) {
-        browser.downloads.onChanged.removeListener(changedListener);
-        browser.downloads.onErased.removeListener(erasedListener);
+        cleanup();
         resolve(delta.filename.current);
       }
     };
     const erasedListener = (id) => {
       if (id === downloadId) {
-        browser.downloads.onChanged.removeListener(changedListener);
-        browser.downloads.onErased.removeListener(erasedListener);
+        cleanup();
         reject(new Error(`Download ${downloadId} was erased before filename was resolved`));
       }
     };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for filename of download ${downloadId}`));
+    }, timeoutMs);
     browser.downloads.onChanged.addListener(changedListener);
     browser.downloads.onErased.addListener(erasedListener);
   });

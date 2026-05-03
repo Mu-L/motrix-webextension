@@ -1,13 +1,7 @@
 'use strict';
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
-import {
-  Grid,
-  Paper,
-  IconButton,
-  LinearProgress,
-  Container,
-} from '@mui/material';
+import { Grid, Paper, IconButton, LinearProgress, Container } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import createThemed from './createThemed';
 import * as browser from 'webextension-polyfill';
@@ -33,10 +27,7 @@ function HistoryView() {
       <Grid container justifyContent="center" spacing={2}>
         <Grid item xs={11}>
           {downloadHistory.map((el) => (
-            <Paper
-              key={el.gid}
-              style={{ display: 'flex', marginBottom: '8px' }}
-            >
+            <Paper key={el.gid} style={{ display: 'flex', marginBottom: '8px' }}>
               <div
                 style={{
                   padding: '8px',
@@ -57,13 +48,7 @@ function HistoryView() {
                 }}
               >
                 <div>{el.name ?? 'unknown'}</div>
-                {el.status === 'downloading' ? (
-                  <LinearProgress
-                    style={{ margin: '4px' }}
-                    variant="determinate"
-                    value={Math.min((el.downloaded * 100) / el.size, 100)}
-                  />
-                ) : null}
+                {el.status === 'downloading' ? el.downloaded != null && el.size > 0 ? <LinearProgress style={{ margin: '4px' }} variant="determinate" value={Math.min((el.downloaded * 100) / el.size, 100)} /> : <LinearProgress style={{ margin: '4px' }} /> : null}
               </div>
               <div
                 style={{
@@ -75,14 +60,7 @@ function HistoryView() {
                 }}
               >
                 {el.status === 'completed' ? (
-                  <IconButton
-                    variant="outlined"
-                    onClick={() =>
-                      el.downloader === 'browser'
-                        ? browser.downloads.show(el.gid)
-                        : browser.tabs.create({ url: 'motrix://' })
-                    }
-                  >
+                  <IconButton variant="outlined" onClick={() => (el.downloader === 'browser' ? browser.downloads.show(el.gid) : browser.tabs.create({ url: 'motrix://' }))}>
                     <FolderIcon />
                   </IconButton>
                 ) : null}

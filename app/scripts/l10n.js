@@ -13,25 +13,13 @@ var l10n = {
   },
 
   updateSubtree(node) {
-    const texts = document.evaluate(
-      'descendant::text()[contains(self::text(), "__MSG_")]',
-      node,
-      null,
-      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
-      null
-    );
+    const texts = document.evaluate('descendant::text()[contains(self::text(), "__MSG_")]', node, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
     for (let i = 0, maxi = texts.snapshotLength; i < maxi; i++) {
       const text = texts.snapshotItem(i);
       text.nodeValue = this.updateString(text.nodeValue);
     }
 
-    const attributes = document.evaluate(
-      'descendant::*/attribute::*[contains(., "__MSG_")]',
-      node,
-      null,
-      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
-      null
-    );
+    const attributes = document.evaluate('descendant::*/attribute::*[contains(., "__MSG_")]', node, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 
     for (let i = 0, maxi = attributes.snapshotLength; i < maxi; i++) {
       const attribute = attributes.snapshotItem(i);

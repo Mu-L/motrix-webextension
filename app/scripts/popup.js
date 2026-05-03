@@ -15,13 +15,7 @@ import { useBrowserStorage } from './hooks/useBrowserStorage';
 function OptProgress({ status, downloaded, size }) {
   if (status !== 'downloading') return null;
   if (downloaded != null && size != null && size > 0) {
-    return (
-      <LinearProgress
-        style={{ margin: '4px' }}
-        variant="determinate"
-        value={Math.min((downloaded * 100) / size, 100)}
-      />
-    );
+    return <LinearProgress style={{ margin: '4px' }} variant="determinate" value={Math.min((downloaded * 100) / size, 100)} />;
   }
   return <LinearProgress style={{ margin: '4px' }} />;
 }
@@ -35,10 +29,7 @@ OptProgress.propTypes = {
 function FolderButton({ element }) {
   if (element.status !== 'completed') return null;
 
-  const onClick =
-    element.downloader === 'browser'
-      ? () => browser.downloads.show(element.gid)
-      : () => browser.tabs.create({ url: 'motrix://' });
+  const onClick = element.downloader === 'browser' ? () => browser.downloads.show(element.gid) : () => browser.tabs.create({ url: 'motrix://' });
 
   return (
     <IconButton variant="outlined" onClick={onClick}>
@@ -61,7 +52,6 @@ function PopupView() {
 
   const onExtensionStatusChange = (status) => {
     browser.storage.sync.set({ extensionStatus: status });
-    if (!status) browser.downloads.setShelfEnabled?.(true);
   };
 
   const parseName = (name) => {
@@ -73,27 +63,18 @@ function PopupView() {
   return (
     <Grid container justifyContent="center" spacing={2}>
       <Grid item xs={2}>
-        <IconButton
-          variant="outlined"
-          onClick={() => onExtensionStatusChange(!extensionStatus)}
-        >
+        <IconButton variant="outlined" onClick={() => onExtensionStatusChange(!extensionStatus)}>
           <PowerSettingsNewIcon color={extensionStatus ? 'success' : 'error'} />
         </IconButton>
       </Grid>
       <Grid item xs={2}>
-        <IconButton
-          variant="outlined"
-          onClick={() => browser.tabs.create({ url: browser.runtime.getURL('pages/config.html') })}
-        >
+        <IconButton variant="outlined" onClick={() => browser.tabs.create({ url: browser.runtime.getURL('pages/config.html') })}>
           <SettingsIcon />
         </IconButton>
       </Grid>
       <Grid item xs={1} />
       <Grid item xs={2}>
-        <IconButton
-          variant="outlined"
-          onClick={() => browser.tabs.create({ url: browser.runtime.getURL('pages/history.html') })}
-        >
+        <IconButton variant="outlined" onClick={() => browser.tabs.create({ url: browser.runtime.getURL('pages/history.html') })}>
           <HistoryIcon />
         </IconButton>
       </Grid>
@@ -108,10 +89,7 @@ function PopupView() {
         </IconButton>
       </Grid>
       <Grid item xs={2}>
-        <IconButton
-          variant="outlined"
-          onClick={() => browser.downloads.showDefaultFolder()}
-        >
+        <IconButton variant="outlined" onClick={() => browser.downloads.showDefaultFolder()}>
           <FolderIcon />
         </IconButton>
       </Grid>
@@ -127,14 +105,8 @@ function PopupView() {
               backgroundColor: '#fff3e0',
             }}
           >
-            <span style={{ fontSize: '13px', color: '#e65100' }}>
-              Motrix is not reachable. Please open Motrix.
-            </span>
-            <IconButton
-              size="small"
-              onClick={() => browser.tabs.create({ url: 'motrix://' })}
-              style={{ color: '#e65100' }}
-            >
+            <span style={{ fontSize: '13px', color: '#e65100' }}>Motrix is not reachable. Please open Motrix.</span>
+            <IconButton size="small" onClick={() => browser.tabs.create({ url: 'motrix://' })} style={{ color: '#e65100' }}>
               <PowerSettingsNewIcon fontSize="small" />
             </IconButton>
           </Paper>
@@ -166,11 +138,7 @@ function PopupView() {
                 }}
               >
                 <div className="text">{parseName(el.name)}</div>
-                <OptProgress
-                  status={el.status}
-                  downloaded={el.downloaded}
-                  size={el.size}
-                />
+                <OptProgress status={el.status} downloaded={el.downloaded} size={el.size} />
               </div>
               <div
                 style={{

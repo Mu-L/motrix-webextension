@@ -60,11 +60,7 @@ async function handleDownload(downloadItem) {
     }
 
     if (!settings.motrixAPIkey) {
-      await notify(
-        'API key not set',
-        'Set a random API key in the extension and in Motrix Preferences > Advanced > RPC Secret',
-        () => browser.tabs.create({ url: 'motrix://' })
-      );
+      await notify('API key not set', 'Set a random API key in the extension and in Motrix Preferences > Advanced > RPC Secret', () => browser.tabs.create({ url: 'motrix://' }));
       await browser.downloads.resume(downloadItem.id).catch(() => {});
       trackWithBrowser(downloadItem, downloadStore);
       return;
@@ -79,10 +75,7 @@ async function handleDownload(downloadItem) {
     });
 
     try {
-      const [filename, cookies] = await Promise.all([
-        waitForFilename(downloadItem.id),
-        browser.cookies.getAll({ url: downloadItem.url }),
-      ]);
+      const [filename, cookies] = await Promise.all([waitForFilename(downloadItem.id), browser.cookies.getAll({ url: downloadItem.url })]);
 
       if (promptBeforeDownload) {
         await browser.downloads.pause(downloadItem.id).catch(() => {});
@@ -98,10 +91,7 @@ async function handleDownload(downloadItem) {
       };
 
       const downloadUrl = downloadItem.finalUrl || downloadItem.url;
-      const [gid, icon] = await Promise.all([
-        aria2Service.addUri(downloadUrl, params),
-        browser.downloads.getFileIcon(downloadItem.id).catch(() => ''),
-      ]);
+      const [gid, icon] = await Promise.all([aria2Service.addUri(downloadUrl, params), browser.downloads.getFileIcon(downloadItem.id).catch(() => '')]);
       browser.storage.local.set({ motrixReachable: true }).catch(() => {});
 
       // Mark before erasing so onErased doesn't delete the store entry
@@ -120,11 +110,7 @@ async function handleDownload(downloadItem) {
       trackWithAria2(gid, downloadItem.id, downloadStore, aria2Service);
 
       if (settings.enableNotifications) {
-        await notify(
-          'Motrix WebExtension',
-          'Download started in Motrix',
-          () => browser.tabs.create({ url: 'motrix://' })
-        );
+        await notify('Motrix WebExtension', 'Download started in Motrix', () => browser.tabs.create({ url: 'motrix://' }));
       }
     } catch (error) {
       console.error('Motrix WebExtension: failed to send to Motrix:', error);
@@ -157,11 +143,8 @@ export function createMenuItem() {
         visible: true,
         contexts: ['link'],
       });
-      browser.contextMenus.onClicked.removeListener(menuClickHandler);
-      browser.contextMenus.onClicked.addListener(menuClickHandler);
     });
   } else {
-    browser.contextMenus.onClicked.removeListener(menuClickHandler);
     browser.contextMenus.removeAll();
   }
 }
@@ -187,6 +170,9 @@ async function init() {
       const shouldHide = settingsCache.get('hideChromeBar');
       browser.downloads.setShelfEnabled?.(!shouldHide && !!isEnabled);
     }
+    if ('showContextOption' in changes) {
+      createMenuItem();
+    }
   });
 
   createMenuItem();
@@ -208,6 +194,7 @@ async function checkMotrixStatus() {
 // them. Putting them inside onInstalled/onStartup meant they were never
 // registered in subsequent wake cycles, silently dropping all downloads.
 
+browser.contextMenus.onClicked.addListener(menuClickHandler);
 browser.downloads.onCreated.addListener(handleDownload);
 
 browser.downloads.onErased.addListener(async (id) => {

@@ -1,14 +1,7 @@
 'use strict';
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
-import {
-  Button,
-  Container,
-  FormLabel,
-  Grid,
-  Switch,
-  TextField,
-} from '@mui/material';
+import { Button, Container, FormLabel, Grid, Switch, TextField } from '@mui/material';
 import { Box } from '@mui/system';
 import createThemed from './createThemed';
 import * as browser from 'webextension-polyfill';
@@ -64,9 +57,7 @@ function ConfigView() {
         setMotrixPort(r.motrixPort);
 
         // Persist defaults only for keys that were actually missing from storage
-        const missing = Object.fromEntries(
-          Object.entries(DEFAULTS).filter(([key]) => !(key in result))
-        );
+        const missing = Object.fromEntries(Object.entries(DEFAULTS).filter(([key]) => !(key in result)));
         if (Object.keys(missing).length > 0) {
           await browser.storage.sync.set(missing).catch(() => {});
         }
@@ -79,65 +70,30 @@ function ConfigView() {
       <Grid container justifyContent="center" spacing={2} padding={2}>
         {/* Motrix API key */}
         <Grid item xs={6}>
-          <TextField
-            id="motrix-key"
-            label="__MSG_setKey__"
-            variant="outlined"
-            fullWidth
-            value={motrixAPIkey}
-            onChange={(e) => setMotrixAPIkey(e.target.value)}
-          />
+          <TextField id="motrix-key" label="__MSG_setKey__" variant="outlined" fullWidth value={motrixAPIkey} onChange={(e) => setMotrixAPIkey(e.target.value)} />
         </Grid>
         <Grid item xs={2}>
-          <Button
-            variant="outlined"
-            style={{ width: '100%', height: '100%' }}
-            onClick={() => save({ motrixAPIkey })}
-          >
+          <Button variant="outlined" style={{ width: '100%', height: '100%' }} onClick={() => save({ motrixAPIkey })}>
             __MSG_setKey__
           </Button>
         </Grid>
 
         {/* Motrix port */}
         <Grid item xs={6}>
-          <TextField
-            id="motrix-port"
-            label="__MSG_setPort__"
-            variant="outlined"
-            type="number"
-            fullWidth
-            value={motrixPort}
-            onChange={(e) => setMotrixPort(Number(e.target.value))}
-          />
+          <TextField id="motrix-port" label="__MSG_setPort__" variant="outlined" type="number" fullWidth value={motrixPort} onChange={(e) => setMotrixPort(Number(e.target.value))} />
         </Grid>
         <Grid item xs={2}>
-          <Button
-            variant="outlined"
-            style={{ width: '100%', height: '100%' }}
-            onClick={() => save({ motrixPort })}
-          >
+          <Button variant="outlined" style={{ width: '100%', height: '100%' }} onClick={() => save({ motrixPort })}>
             __MSG_setPort__
           </Button>
         </Grid>
 
         {/* Minimum file size */}
         <Grid item xs={6}>
-          <TextField
-            id="minimum-size"
-            label="__MSG_setMinSize__"
-            variant="outlined"
-            type="number"
-            fullWidth
-            value={minFileSize}
-            onChange={(e) => setMinFileSize(e.target.value)}
-          />
+          <TextField id="minimum-size" label="__MSG_setMinSize__" variant="outlined" type="number" fullWidth value={minFileSize} onChange={(e) => setMinFileSize(e.target.value)} />
         </Grid>
         <Grid item xs={2}>
-          <Button
-            variant="outlined"
-            style={{ width: '100%', height: '100%' }}
-            onClick={() => save({ minFileSize: minFileSize === '' ? 0 : Number(minFileSize) })}
-          >
+          <Button variant="outlined" style={{ width: '100%', height: '100%' }} onClick={() => save({ minFileSize: minFileSize === '' ? 0 : Number(minFileSize) })}>
             __MSG_setSize__
           </Button>
         </Grid>
@@ -238,9 +194,6 @@ function ConfigView() {
               checked={hideChromeBar}
               onClick={() => {
                 const next = !hideChromeBar;
-                if (browser.downloads.setShelfEnabled && extensionStatus) {
-                  browser.downloads.setShelfEnabled(!next);
-                }
                 save({ hideChromeBar: next });
                 setHideChromeBar(next);
               }}
@@ -258,10 +211,6 @@ function ConfigView() {
               checked={showContextOption}
               onClick={() => {
                 const next = !showContextOption;
-                browser.contextMenus.update(
-                  'motrix-webextension-download-context-menu-option',
-                  { visible: next }
-                );
                 save({ showContextOption: next });
                 setShowContextOption(next);
               }}
@@ -271,23 +220,11 @@ function ConfigView() {
 
         {/* Blacklist */}
         <Grid item xs={8}>
-          <TextField
-            label="__MSG_blacklist__"
-            helperText='Both URLs and extensions are valid. For file extensions, only include the extension text (e.g. "pdf"). One entry per line.'
-            multiline
-            fullWidth
-            rows={4}
-            value={blacklist.join('\n')}
-            onChange={(e) => setBlacklist(e.target.value.split('\n'))}
-          />
+          <TextField label="__MSG_blacklist__" helperText='Both URLs and extensions are valid. For file extensions, only include the extension text (e.g. "pdf"). One entry per line.' multiline fullWidth rows={4} value={blacklist.join('\n')} onChange={(e) => setBlacklist(e.target.value.split('\n'))} />
         </Grid>
         <Grid item xs={6} />
         <Grid item xs={2}>
-          <Button
-            variant="outlined"
-            style={{ width: '100%', height: '56px' }}
-            onClick={() => save({ blacklist: blacklist.filter((x) => x !== '') })}
-          >
+          <Button variant="outlined" style={{ width: '100%', height: '56px' }} onClick={() => save({ blacklist: blacklist.filter((x) => x !== '') })}>
             __MSG_saveBlacklist__
           </Button>
         </Grid>
